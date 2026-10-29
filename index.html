@@ -1,0 +1,1812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPU Vision Tracker — Real-Time Soleus Push-Up Monitoring</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel-bg: #1e293b;
+      --panel-border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --surface: #0b1120;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.45;
+      padding: 16px;
+      min-height: 100vh;
+    }
+
+    header {
+      max-width: 1440px;
+      margin: 0 auto 14px auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 10px;
+    }
+
+    header h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+    }
+
+    header p.subtitle {
+      font-size: 0.95rem;
+      font-style: italic;
+      color: var(--accent);
+      margin-left: 10px;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+
+    .privacy-badge {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    /* Main 3-Panel Grid */
+    .main-grid {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.35fr 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1180px) {
+      .main-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .panel-camera {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 8px;
+    }
+
+    .panel-header h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* Status Badges & Bars */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .status-item {
+      background: var(--surface);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+
+    .status-label {
+      color: var(--text-muted);
+    }
+
+    .status-value {
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #1e293b;
+    }
+
+    .status-ok { color: #4ade80; background: rgba(34, 197, 94, 0.15); }
+    .status-warn { color: #fbbf24; background: rgba(245, 158, 11, 0.15); }
+    .status-err { color: #f87171; background: rgba(239, 68, 68, 0.15); }
+    .status-neutral { color: #cbd5e1; background: rgba(148, 163, 184, 0.15); }
+
+    /* Camera Viewport */
+    .viewport-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: #020617;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--panel-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    video#webcam {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+
+    canvas#overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    .camera-placeholder {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      max-width: 85%;
+    }
+
+    .instruction-banner {
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid var(--accent);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.86rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .warning-banner {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid var(--danger);
+      color: #fca5a5;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      display: none;
+    }
+
+    .warning-banner.visible {
+      display: block;
+    }
+
+    .notice-banner {
+      background: rgba(245, 158, 11, 0.14);
+      border: 1px solid var(--warning);
+      color: #fde68a;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 9px 14px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: #334155;
+      color: var(--text-main);
+      transition: background 0.15s, opacity 0.15s;
+      flex: 1 1 auto;
+      text-align: center;
+    }
+
+    button:hover:not(:disabled) {
+      background: #475569;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    button.btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+    }
+
+    button.btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      color: #fff;
+    }
+
+    button.btn-success {
+      background: var(--success);
+      color: #052e16;
+    }
+
+    button.btn-success:hover:not(:disabled) {
+      background: #16a34a;
+      color: #fff;
+    }
+
+    button.btn-warning {
+      background: var(--warning);
+      color: #451a03;
+    }
+
+    button.btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button.btn-danger:hover:not(:disabled) {
+      background: #dc2626;
+    }
+
+    /* Parameters Form */
+    .param-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .param-item {
+      background: var(--surface);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .param-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .param-val-badge {
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+    }
+
+    .param-controls {
+      display: grid;
+      grid-template-columns: 1fr 74px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    input[type="number"], select {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 0.84rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .param-desc {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Timer & Counter Panel */
+    .metrics-hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .metric-title {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .metric-big {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.1;
+    }
+
+    .metric-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .phase-box {
+      background: var(--surface);
+      border: 2px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .phase-label-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .phase-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-top: 4px;
+      color: var(--accent);
+    }
+
+    .progress-container {
+      background: var(--surface);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      margin-bottom: 6px;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 10px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--success);
+      transition: width 0.2s ease;
+    }
+
+    .telemetry-box {
+      background: var(--surface);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.8rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .telemetry-val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 600;
+    }
+
+    .footnote {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-group">
+      <h1>SPU Vision Tracker</h1>
+      <p class="subtitle">Real-Time Soleus Push-Up Monitoring</p>
+    </div>
+    <div class="privacy-badge">Local Browser Processing Only • No Video Uploaded or Saved</div>
+  </header>
+
+  <main class="main-grid">
+    <!-- SECTION A: CAMERA INPUT -->
+    <section class="panel panel-camera" aria-label="Camera Input">
+      <div class="panel-header">
+        <h2>A. Camera Input</h2>
+        <div style="display:flex; align-items:center; gap:8px; font-size:0.82rem; flex-wrap:wrap;">
+          <label for="cameraFacingSelect" style="color:var(--text-muted);">Camera:</label>
+          <select id="cameraFacingSelect" style="width:auto;">
+            <option value="environment">Rear (Back)</option>
+            <option value="user">Front (Selfie)</option>
+          </select>
+          <label for="legSelect" style="color:var(--text-muted);">Leg:</label>
+          <select id="legSelect" style="width:auto;">
+            <option value="auto">Auto</option>
+            <option value="left">Left Leg</option>
+            <option value="right">Right Leg</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="status-label">Camera Status</span>
+          <span id="cameraStatus" class="status-value status-neutral">Off</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Detection Status</span>
+          <span id="detectionStatus" class="status-value status-neutral">Ready</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Model Status</span>
+          <span id="modelStatus" class="status-value status-warn">Loading</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Camera Perspective</span>
+          <span id="perspectiveStatus" class="status-value status-ok">Side View (90°)</span>
+        </div>
+      </div>
+
+      <div class="instruction-banner">
+        <span><strong>Setup Instruction:</strong> Place the camera beside your leg. Keep your heel and forefoot visible (ankle height, ~90° perpendicular side view).</span>
+      </div>
+
+      <div id="warningBanner" class="warning-banner" role="alert"></div>
+
+      <div class="viewport-wrapper">
+        <div id="cameraPlaceholder" class="camera-placeholder">
+          Camera is off.<br />
+          Position your camera at ankle height (~90° side view) with your knee, ankle, heel, and forefoot clearly in frame, then press <strong>Start Camera</strong>.
+        </div>
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+
+      <div class="btn-row">
+        <button id="btnStartCamera" class="btn-primary">Start Camera</button>
+        <button id="btnStopCamera" class="btn-danger" disabled>Stop Camera</button>
+        <button id="btnStartDetection" class="btn-success" disabled>Start Detection</button>
+        <button id="btnStopDetection" class="btn-warning" disabled>Stop Detection</button>
+      </div>
+
+      <div class="notice-banner">
+        <strong>Biomechanical Accuracy Note:</strong> MediaPipe Pose estimates heel (#29/#30), forefoot (#31/#32), ankle (#27/#28), and knee (#25/#26) landmarks from 2D video frames. Ankle vertical motion alone is not assumed to equal heel lift; this tracker measures vertical heel elevation relative to your calibrated resting baseline and stationary forefoot reference. Keep the lower leg, ankle, heel, and forefoot well-lit and unobstructed for valid research comparison against manually annotated video.
+      </div>
+    </section>
+
+    <!-- SECTION B: SOLEUS MOVEMENT PARAMETERS -->
+    <section class="panel" aria-label="Soleus Movement Parameters">
+      <div class="panel-header">
+        <h2>B. Soleus Movement Parameters</h2>
+        <button id="btnResetParams" style="flex:0 0 auto; padding:5px 10px; font-size:0.8rem;">Reset Parameters</button>
+      </div>
+
+      <div id="recalNotice" class="warning-banner">
+        Parameter update noted. If you changed camera distance or framing, please press <strong>Calibrate</strong> to refresh your resting baseline.
+      </div>
+
+      <div class="param-list">
+        <!-- 1. Heel Lift Threshold -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pLiftThreshold">1. Heel Lift Threshold</label>
+            <span class="param-val-badge"><span id="valLiftThreshold">10</span> px</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pLiftThreshold" min="2" max="40" step="1" value="10" />
+            <input type="number" id="nLiftThreshold" min="2" max="40" step="1" value="10" aria-label="Heel Lift Threshold in pixels" />
+          </div>
+          <div class="param-desc">Minimum estimated heel elevation required to classify the movement as a heel lift.</div>
+        </div>
+
+        <!-- 2. Minimum Lift Duration -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pMinLiftDur">2. Minimum Lift Duration</label>
+            <span class="param-val-badge"><span id="valMinLiftDur">150</span> ms</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pMinLiftDur" min="50" max="1000" step="10" value="150" />
+            <input type="number" id="nMinLiftDur" min="50" max="1000" step="10" value="150" aria-label="Minimum Lift Duration in milliseconds" />
+          </div>
+          <div class="param-desc">Reject brief movement noise before transitioning to Heel Raised.</div>
+        </div>
+
+        <!-- 3. Minimum Repetition Duration -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pMinRepDur">3. Minimum Repetition Duration</label>
+            <span class="param-val-badge"><span id="valMinRepDur">500</span> ms</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pMinRepDur" min="200" max="3000" step="50" value="500" />
+            <input type="number" id="nMinRepDur" min="200" max="3000" step="50" value="500" aria-label="Minimum Repetition Duration in milliseconds" />
+          </div>
+          <div class="param-desc">Reject implausibly short repetition cycles.</div>
+        </div>
+
+        <!-- 4. Maximum Repetition Duration -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pMaxRepDur">4. Maximum Repetition Duration</label>
+            <span class="param-val-badge"><span id="valMaxRepDur">3000</span> ms</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pMaxRepDur" min="1000" max="10000" step="100" value="3000" />
+            <input type="number" id="nMaxRepDur" min="1000" max="10000" step="100" value="3000" aria-label="Maximum Repetition Duration in milliseconds" />
+          </div>
+          <div class="param-desc">Reject or expire unusually long incomplete cycles.</div>
+        </div>
+
+        <!-- 5. Return-to-Baseline Threshold -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pReturnThreshold">5. Return-to-Baseline Threshold</label>
+            <span class="param-val-badge"><span id="valReturnThreshold">4</span> px</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pReturnThreshold" min="1" max="20" step="1" value="4" />
+            <input type="number" id="nReturnThreshold" min="1" max="20" step="1" value="4" aria-label="Return-to-Baseline Threshold in pixels" />
+          </div>
+          <div class="param-desc">Determine when the heel has returned close enough to resting baseline to complete a repetition.</div>
+        </div>
+
+        <!-- 6. Smoothing Strength -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pSmoothing">6. Smoothing Strength</label>
+            <span class="param-val-badge"><span id="valSmoothing">0.50</span></span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pSmoothing" min="0" max="0.95" step="0.05" value="0.5" />
+            <input type="number" id="nSmoothing" min="0" max="0.95" step="0.05" value="0.5" aria-label="Smoothing Strength" />
+          </div>
+          <div class="param-desc">Exponential moving average factor to reduce frame-to-frame landmark jitter.</div>
+        </div>
+
+        <!-- 7. Repetition Cooldown -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pCooldown">7. Repetition Cooldown</label>
+            <span class="param-val-badge"><span id="valCooldown">300</span> ms</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pCooldown" min="100" max="1500" step="25" value="300" />
+            <input type="number" id="nCooldown" min="100" max="1500" step="25" value="300" aria-label="Repetition Cooldown in milliseconds" />
+          </div>
+          <div class="param-desc">Minimum refractory period after a count to prevent duplicate triggers.</div>
+        </div>
+
+        <!-- 8. Target Repetitions -->
+        <div class="param-item">
+          <div class="param-top">
+            <label for="pTargetReps">8. Target Repetitions</label>
+            <span class="param-val-badge"><span id="valTargetReps">20</span> reps</span>
+          </div>
+          <div class="param-controls">
+            <input type="range" id="pTargetReps" min="1" max="100" step="1" value="20" />
+            <input type="number" id="nTargetReps" min="1" max="100" step="1" value="20" aria-label="Target Repetitions" />
+          </div>
+          <div class="param-desc">Set the user's target repetition count for the current session.</div>
+        </div>
+      </div>
+
+      <p class="footnote">
+        * Engineering defaults only — not clinically validated SPU thresholds. Pixel displacements depend on camera distance, resolution, framing, and perspective.
+      </p>
+    </section>
+
+    <!-- SECTION C: TIMER AND REPETITION COUNTER -->
+    <section class="panel" aria-label="Timer and Repetition Counter">
+      <div class="panel-header">
+        <h2>C. Timer &amp; Repetition Counter</h2>
+        <span id="calibrationBadge" class="status-value status-warn" style="font-size:0.78rem;">Uncalibrated</span>
+      </div>
+
+      <div class="metrics-hero">
+        <div class="metric-card">
+          <div class="metric-title">Elapsed Time</div>
+          <div id="timerDisplay" class="metric-big">00:00</div>
+          <div id="timerStateSub" class="metric-sub">Stopped</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Repetitions</div>
+          <div class="metric-big">
+            <span id="repCountDisplay">0</span><span style="font-size:1.15rem; color:var(--text-muted);"> / <span id="targetRepDisplay">20</span></span>
+          </div>
+          <div id="repSubStatus" class="metric-sub">0% of target</div>
+        </div>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-header">
+          <span>Progress Toward Target</span>
+          <span id="progressText">0 / 20 (0%)</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="progressBarFill" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <div class="phase-box">
+        <div class="phase-label-title">Current Movement Phase</div>
+        <div id="phaseDisplay" class="phase-value">Waiting for Calibration</div>
+      </div>
+
+      <div class="telemetry-box" aria-label="Live Tracking Telemetry">
+        <div class="telemetry-row">
+          <span class="status-label">Tracking Quality:</span>
+          <span id="trackingQualityDisplay" class="telemetry-val" style="color:var(--text-muted);">Inactive</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="status-label">Active Side:</span>
+          <span id="activeSideDisplay" class="telemetry-val">—</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="status-label">Heel Lift (Est.):</span>
+          <span id="liveHeelLiftDisplay" class="telemetry-val">0.0 px</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="status-label">Forefoot Drift:</span>
+          <span id="liveForefootDriftDisplay" class="telemetry-val">0.0 px</span>
+        </div>
+        <div class="telemetry-row" style="grid-column: 1 / -1;">
+          <span class="status-label">Last Cycle Info:</span>
+          <span id="lastCycleInfo" class="telemetry-val" style="color:var(--text-muted);">No cycle recorded yet</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button id="btnCalibrate" class="btn-primary" disabled>Calibrate</button>
+      </div>
+
+      <div class="btn-row">
+        <button id="btnStartTimer" class="btn-success">Start Timer</button>
+        <button id="btnPauseTimer" class="btn-warning" disabled>Pause</button>
+        <button id="btnResumeTimer" class="btn-primary" disabled>Resume</button>
+        <button id="btnResetSession" class="btn-danger">Reset</button>
+      </div>
+
+      <div class="footnote">
+        <strong>Calibration workflow:</strong> Sit in a stable chair with your forefoot resting flat on the floor and heel grounded. Ensure camera &amp; detection are active, then press <strong>Calibrate</strong> and hold still for ~1 second (20 valid frames). You may recalibrate at any time if your foot or camera shifts.
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // --- Default Parameters ---
+    const DEFAULT_PARAMS = {
+      liftThreshold: 10,       // px (2-40)
+      minLiftDur: 150,         // ms (50-1000)
+      minRepDur: 500,          // ms (200-3000)
+      maxRepDur: 3000,         // ms (1000-10000)
+      returnThreshold: 4,      // px (1-20)
+      smoothing: 0.5,          // 0-0.95
+      cooldown: 300,           // ms (100-1500)
+      targetReps: 20           // reps (1-100)
+    };
+
+    const params = { ...DEFAULT_PARAMS };
+
+    // --- DOM Elements ---
+    const elCameraStatus = document.getElementById("cameraStatus");
+    const elDetectionStatus = document.getElementById("detectionStatus");
+    const elModelStatus = document.getElementById("modelStatus");
+    const elWarningBanner = document.getElementById("warningBanner");
+    const elCameraPlaceholder = document.getElementById("cameraPlaceholder");
+    const elVideo = document.getElementById("webcam");
+    const elCanvas = document.getElementById("overlay");
+    const ctx = elCanvas.getContext("2d");
+    const elLegSelect = document.getElementById("legSelect");
+    const elCameraFacingSelect = document.getElementById("cameraFacingSelect");
+
+    const btnStartCamera = document.getElementById("btnStartCamera");
+    const btnStopCamera = document.getElementById("btnStopCamera");
+    const btnStartDetection = document.getElementById("btnStartDetection");
+    const btnStopDetection = document.getElementById("btnStopDetection");
+    const btnResetParams = document.getElementById("btnResetParams");
+    const btnCalibrate = document.getElementById("btnCalibrate");
+    const btnStartTimer = document.getElementById("btnStartTimer");
+    const btnPauseTimer = document.getElementById("btnPauseTimer");
+    const btnResumeTimer = document.getElementById("btnResumeTimer");
+    const btnResetSession = document.getElementById("btnResetSession");
+
+    const elCalibrationBadge = document.getElementById("calibrationBadge");
+    const elTimerDisplay = document.getElementById("timerDisplay");
+    const elTimerStateSub = document.getElementById("timerStateSub");
+    const elRepCountDisplay = document.getElementById("repCountDisplay");
+    const elTargetRepDisplay = document.getElementById("targetRepDisplay");
+    const elRepSubStatus = document.getElementById("repSubStatus");
+    const elProgressText = document.getElementById("progressText");
+    const elProgressBarFill = document.getElementById("progressBarFill");
+    const elPhaseDisplay = document.getElementById("phaseDisplay");
+    const elTrackingQuality = document.getElementById("trackingQualityDisplay");
+    const elActiveSide = document.getElementById("activeSideDisplay");
+    const elLiveHeelLift = document.getElementById("liveHeelLiftDisplay");
+    const elLiveForefootDrift = document.getElementById("liveForefootDriftDisplay");
+    const elLastCycleInfo = document.getElementById("lastCycleInfo");
+    const elRecalNotice = document.getElementById("recalNotice");
+
+    // --- Runtime State ---
+    let poseLandmarker = null;
+    let modelReady = false;
+    let mediaStream = null;
+    let cameraActive = false;
+    let detectionActive = false;
+    let rafId = null;
+    let lastVideoTime = -1;
+
+    // Calibration state
+    const CALIBRATION_REQUIRED_FRAMES = 20;
+    let isCalibrating = false;
+    let calibrationSamples = [];
+    let isCalibrated = false;
+    let baselineData = null; // { side, heelY, forefootY, ankleY, heelToForefootDY, videoWidth, videoHeight }
+
+    // Smoothed landmarks in pixel space
+    let smoothed = null; // { heelX, heelY, forefootX, forefootY, ankleX, ankleY, kneeX, kneeY }
+
+    // Movement State Machine
+    // Phases:
+    // "Waiting for Calibration" | "Ready" | "Heel Rising" | "Heel Raised" | "Heel Lowering" | "Repetition Completed" | "Tracking Lost"
+    let currentPhase = "Waiting for Calibration";
+    let phaseBeforeTrackingLost = "Waiting for Calibration";
+    let cycleStartTime = 0;
+    let liftReachedTime = 0;
+    let peakHeelLiftPx = 0;
+    let lastRepCompletedTime = -Infinity;
+    let repCompletedHoldUntil = 0;
+    let repCount = 0;
+
+    // Monotonic Session Timer
+    let timerRunning = false;
+    let timerPaused = false;
+    let timerStartMono = 0;
+    let timerAccumulatedMs = 0;
+    let timerIntervalId = null;
+
+    // --- Helper UI Functions ---
+    function setBadge(el, text, level) {
+      el.textContent = text;
+      el.className = `status-value status-${level}`;
+    }
+
+    function showWarning(msg) {
+      if (!msg) {
+        elWarningBanner.textContent = "";
+        elWarningBanner.classList.remove("visible");
+      } else {
+        elWarningBanner.textContent = msg;
+        elWarningBanner.classList.add("visible");
+      }
+    }
+
+    function getOriginRestrictionMessage() {
+      const proto = window.location.protocol;
+      if (proto === "content:" || proto === "file:") {
+        return `Android/Chrome blocks camera & WebAssembly modules when opened directly from local storage (${proto}//). Please host this file over HTTPS (e.g., GitHub Pages / Netlify) or open via http://localhost.`;
+      }
+      if (!window.isSecureContext) {
+        return `Insecure origin detected (${window.location.origin}). Android Chrome disables camera access on plain HTTP LAN IPs. Use HTTPS, or on Android Chrome open chrome://flags/#unsafely-treat-insecure-origin-as-secure and add ${window.location.origin}.`;
+      }
+      return "";
+    }
+
+    function setMovementPhase(phase) {
+      currentPhase = phase;
+      elPhaseDisplay.textContent = phase;
+      if (phase === "Tracking Lost") {
+        elPhaseDisplay.style.color = "var(--danger)";
+      } else if (phase === "Repetition Completed") {
+        elPhaseDisplay.style.color = "var(--success)";
+      } else if (phase === "Heel Rising" || phase === "Heel Raised" || phase === "Heel Lowering") {
+        elPhaseDisplay.style.color = "var(--warning)";
+      } else {
+        elPhaseDisplay.style.color = "var(--accent)";
+      }
+    }
+
+    function updateRepUI() {
+      elRepCountDisplay.textContent = String(repCount);
+      elTargetRepDisplay.textContent = String(params.targetReps);
+      const pct = Math.min(100, Math.round((repCount / Math.max(1, params.targetReps)) * 100));
+      elRepSubStatus.textContent = `${pct}% of target`;
+      elProgressText.textContent = `${repCount} / ${params.targetReps} (${pct}%)`;
+      elProgressBarFill.style.width = `${pct}%`;
+    }
+
+    function updateControlStates() {
+      btnStartCamera.disabled = cameraActive;
+      btnStopCamera.disabled = !cameraActive;
+      btnStartDetection.disabled = !cameraActive || !modelReady || detectionActive;
+      btnStopDetection.disabled = !detectionActive;
+      btnCalibrate.disabled = !cameraActive || !detectionActive || !modelReady || isCalibrating;
+    }
+
+    // --- Initialize MediaPipe Pose Landmarker ---
+    async function initPoseModel() {
+      setBadge(elModelStatus, "Loading", "warn");
+      const originWarn = getOriginRestrictionMessage();
+      if (originWarn) {
+        showWarning(originWarn);
+      }
+
+      try {
+        const mp = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14");
+        const { PoseLandmarker, FilesetResolver } = mp;
+
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        try {
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+              delegate: "GPU"
+            },
+            runningMode: "VIDEO",
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.5,
+            minPosePresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5
+          });
+          modelReady = true;
+          setBadge(elModelStatus, "Ready", "ok");
+        } catch (gpuErr) {
+          // Fallback to CPU delegate if WebGL/GPU delegate fails on mobile GPU
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+              delegate: "CPU"
+            },
+            runningMode: "VIDEO",
+            numPoses: 1
+          });
+          modelReady = true;
+          setBadge(elModelStatus, "Ready (CPU)", "ok");
+        }
+      } catch (err) {
+        modelReady = false;
+        setBadge(elModelStatus, "Failed", "err");
+        const proto = window.location.protocol;
+        if (proto === "content:" || proto === "file:") {
+          showWarning(
+            `Android Chrome blocked loading the vision model from ${proto}//. Do not open index.html directly from Android File Manager/Downloads — serve it via HTTPS or http://localhost.`
+          );
+        } else {
+          showWarning(
+            "Model failed to load. Check your internet connection (MediaPipe WASM & model weights are fetched from CDN on load) or verify WebAssembly is enabled."
+          );
+        }
+      }
+      updateControlStates();
+    }
+
+    // --- Parameter Binding ---
+    const paramBindings = [
+      { key: "liftThreshold", range: "pLiftThreshold", num: "nLiftThreshold", label: "valLiftThreshold", isFloat: false, warnRecal: true },
+      { key: "minLiftDur", range: "pMinLiftDur", num: "nMinLiftDur", label: "valMinLiftDur", isFloat: false, warnRecal: false },
+      { key: "minRepDur", range: "pMinRepDur", num: "nMinRepDur", label: "valMinRepDur", isFloat: false, warnRecal: false },
+      { key: "maxRepDur", range: "pMaxRepDur", num: "nMaxRepDur", label: "valMaxRepDur", isFloat: false, warnRecal: false },
+      { key: "returnThreshold", range: "pReturnThreshold", num: "nReturnThreshold", label: "valReturnThreshold", isFloat: false, warnRecal: true },
+      { key: "smoothing", range: "pSmoothing", num: "nSmoothing", label: "valSmoothing", isFloat: true, warnRecal: false },
+      { key: "cooldown", range: "pCooldown", num: "nCooldown", label: "valCooldown", isFloat: false, warnRecal: false },
+      { key: "targetReps", range: "pTargetReps", num: "nTargetReps", label: "valTargetReps", isFloat: false, warnRecal: false }
+    ];
+
+    function syncParamUI() {
+      for (const b of paramBindings) {
+        const val = params[b.key];
+        const rEl = document.getElementById(b.range);
+        const nEl = document.getElementById(b.num);
+        const lEl = document.getElementById(b.label);
+        rEl.value = String(val);
+        nEl.value = String(val);
+        lEl.textContent = b.isFloat ? Number(val).toFixed(2) : String(val);
+      }
+      updateRepUI();
+    }
+
+    for (const b of paramBindings) {
+      const rEl = document.getElementById(b.range);
+      const nEl = document.getElementById(b.num);
+
+      const handleInput = (rawVal) => {
+        const parsed = b.isFloat ? parseFloat(rawVal) : parseInt(rawVal, 10);
+        if (Number.isNaN(parsed)) return;
+        const min = parseFloat(rEl.min);
+        const max = parseFloat(rEl.max);
+        const clamped = Math.min(max, Math.max(min, parsed));
+        params[b.key] = clamped;
+
+        // Ensure returnThreshold stays strictly below liftThreshold for hysteresis stability
+        if (b.key === "liftThreshold" && params.returnThreshold >= params.liftThreshold) {
+          params.returnThreshold = Math.max(1, params.liftThreshold - 1);
+        }
+        if (b.key === "returnThreshold" && params.returnThreshold >= params.liftThreshold) {
+          params.liftThreshold = Math.min(40, params.returnThreshold + 1);
+        }
+        // Ensure minRepDur <= maxRepDur
+        if (b.key === "minRepDur" && params.minRepDur > params.maxRepDur) {
+          params.maxRepDur = params.minRepDur;
+        }
+        if (b.key === "maxRepDur" && params.maxRepDur < params.minRepDur) {
+          params.minRepDur = params.maxRepDur;
+        }
+
+        syncParamUI();
+        if (b.warnRecal && isCalibrated) {
+          elRecalNotice.classList.add("visible");
+        }
+      };
+
+      rEl.addEventListener("input", (e) => handleInput(e.target.value));
+      nEl.addEventListener("change", (e) => handleInput(e.target.value));
+    }
+
+    btnResetParams.addEventListener("click", () => {
+      Object.assign(params, DEFAULT_PARAMS);
+      syncParamUI();
+      elRecalNotice.classList.remove("visible");
+    });
+
+    elLegSelect.addEventListener("change", () => {
+      if (isCalibrated) {
+        isCalibrated = false;
+        baselineData = null;
+        smoothed = null;
+        setBadge(elCalibrationBadge, "Recalibration Needed", "warn");
+        setMovementPhase("Waiting for Calibration");
+        showWarning("Tracked leg changed. Please press Calibrate to establish a resting baseline for the selected leg.");
+      }
+    });
+
+    elCameraFacingSelect.addEventListener("change", async () => {
+      if (cameraActive) {
+        const wasDetecting = detectionActive;
+        stopCamera();
+        await startCamera();
+        if (wasDetecting && cameraActive && modelReady) {
+          startDetection();
+        }
+      }
+    });
+
+    // --- Camera Management ---
+    async function startCamera() {
+      showWarning("");
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setBadge(elCameraStatus, "Error", "err");
+        const originMsg = getOriginRestrictionMessage();
+        showWarning(
+          originMsg ||
+            "navigator.mediaDevices.getUserMedia is not available in this browser or context (requires localhost or HTTPS)."
+        );
+        return;
+      }
+
+      const preferredFacing = elCameraFacingSelect ? elCameraFacingSelect.value : "environment";
+
+      try {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: preferredFacing },
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            },
+            audio: false
+          });
+        } catch (constraintErr) {
+          // Fallback for Android devices that reject specific resolution/facingMode constraints
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
+
+        elVideo.srcObject = mediaStream;
+
+        // Wait for video metadata on Android Chrome so videoWidth/videoHeight are populated
+        if (elVideo.readyState < 1) {
+          await new Promise((resolve) => {
+            const onLoaded = () => {
+              elVideo.removeEventListener("loadedmetadata", onLoaded);
+              resolve();
+            };
+            elVideo.addEventListener("loadedmetadata", onLoaded);
+          });
+        }
+
+        await elVideo.play();
+
+        elCanvas.width = elVideo.videoWidth || 640;
+        elCanvas.height = elVideo.videoHeight || 480;
+        elVideo.style.display = "block";
+        elCameraPlaceholder.style.display = "none";
+
+        cameraActive = true;
+        setBadge(elCameraStatus, "Active", "ok");
+        setBadge(elDetectionStatus, "Ready", "neutral");
+        updateControlStates();
+      } catch (err) {
+        cameraActive = false;
+        setBadge(elCameraStatus, "Error", "err");
+        const originMsg = getOriginRestrictionMessage();
+        let detail = err && err.message ? ` (${err.name}: ${err.message})` : "";
+        if (originMsg) {
+          showWarning(`${originMsg} Details:${detail}`);
+        } else {
+          showWarning(
+            `Could not access camera${detail}. Please grant camera permission in Chrome Site Settings and ensure no other app is using the camera.`
+          );
+        }
+        updateControlStates();
+      }
+    }
+
+    function stopCamera() {
+      stopDetection();
+
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+      }
+      elVideo.pause();
+      elVideo.srcObject = null;
+      elVideo.style.display = "none";
+      elCameraPlaceholder.style.display = "block";
+      ctx.clearRect(0, 0, elCanvas.width, elCanvas.height);
+
+      cameraActive = false;
+      setBadge(elCameraStatus, "Off", "neutral");
+      setBadge(elDetectionStatus, "Ready", "neutral");
+      elTrackingQuality.textContent = "Inactive";
+      elTrackingQuality.style.color = "var(--text-muted)";
+      updateControlStates();
+    }
+
+    // --- Detection Loop & Landmark Extraction ---
+    function startDetection() {
+      if (!cameraActive || !modelReady || detectionActive) return;
+      detectionActive = true;
+      smoothed = null;
+      lastVideoTime = -1;
+      setBadge(elDetectionStatus, "Detecting", "ok");
+      if (!isCalibrated) {
+        setMovementPhase("Waiting for Calibration");
+      } else {
+        setMovementPhase("Ready");
+      }
+      updateControlStates();
+      scheduleNextFrame();
+    }
+
+    function stopDetection() {
+      detectionActive = false;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      isCalibrating = false;
+      calibrationSamples = [];
+      ctx.clearRect(0, 0, elCanvas.width, elCanvas.height);
+      if (cameraActive) {
+        setBadge(elDetectionStatus, "Ready", "neutral");
+      }
+      elTrackingQuality.textContent = "Stopped";
+      elTrackingQuality.style.color = "var(--text-muted)";
+      updateControlStates();
+    }
+
+    function scheduleNextFrame() {
+      if (!detectionActive) return;
+      rafId = requestAnimationFrame(processVideoFrame);
+    }
+
+    // Extract lower-leg landmarks for Left (25,27,29,31) or Right (26,28,30,32)
+    function selectLegLandmarks(landmarks) {
+      const leftIndices = { side: "Left", knee: 25, ankle: 27, heel: 29, forefoot: 31 };
+      const rightIndices = { side: "Right", knee: 26, ankle: 28, heel: 30, forefoot: 32 };
+
+      const scoreSide = (idx) => {
+        const ankle = landmarks[idx.ankle];
+        const heel = landmarks[idx.heel];
+        const forefoot = landmarks[idx.forefoot];
+        const knee = landmarks[idx.knee];
+        if (!ankle || !heel || !forefoot) return 0;
+        const vAnkle = ankle.visibility ?? 0;
+        const vHeel = heel.visibility ?? 0;
+        const vFore = forefoot.visibility ?? 0;
+        const vKnee = knee ? (knee.visibility ?? 0) : 0;
+        return (vHeel * 0.4) + (vFore * 0.35) + (vAnkle * 0.2) + (vKnee * 0.05);
+      };
+
+      const pref = baselineData && isCalibrated ? baselineData.side.toLowerCase() : elLegSelect.value;
+      let chosen = leftIndices;
+      if (pref === "left") {
+        chosen = leftIndices;
+      } else if (pref === "right") {
+        chosen = rightIndices;
+      } else {
+        chosen = scoreSide(leftIndices) >= scoreSide(rightIndices) ? leftIndices : rightIndices;
+      }
+
+      const heel = landmarks[chosen.heel];
+      const forefoot = landmarks[chosen.forefoot];
+      const ankle = landmarks[chosen.ankle];
+      const knee = landmarks[chosen.knee];
+
+      // Check within frame bounds [0.01, 0.99] and sufficient visibility
+      const inBounds = (pt) => pt && pt.x >= 0.01 && pt.x <= 0.99 && pt.y >= 0.01 && pt.y <= 0.99;
+      const minVis = Math.min(
+        heel?.visibility ?? 0,
+        forefoot?.visibility ?? 0,
+        ankle?.visibility ?? 0
+      );
+
+      const valid =
+        inBounds(heel) &&
+        inBounds(forefoot) &&
+        inBounds(ankle) &&
+        minVis >= 0.45;
+
+      return {
+        valid,
+        side: chosen.side,
+        minVisibility: minVis,
+        heel,
+        forefoot,
+        ankle,
+        knee
+      };
+    }
+
+    function processVideoFrame() {
+      if (!detectionActive || !cameraActive || !poseLandmarker) return;
+
+      if (elVideo.readyState < 2) {
+        scheduleNextFrame();
+        return;
+      }
+
+      if (elCanvas.width !== elVideo.videoWidth || elCanvas.height !== elVideo.videoHeight) {
+        elCanvas.width = elVideo.videoWidth || 640;
+        elCanvas.height = elVideo.videoHeight || 480;
+      }
+
+      const nowMs = performance.now();
+      if (elVideo.currentTime !== lastVideoTime) {
+        lastVideoTime = elVideo.currentTime;
+        let result = null;
+        try {
+          result = poseLandmarker.detectForVideo(elVideo, nowMs);
+        } catch (err) {
+          setBadge(elDetectionStatus, "Error", "err");
+          showWarning(`Pose detection error: ${err.message || err}`);
+          stopDetection();
+          return;
+        }
+
+        handlePoseResult(result, nowMs);
+      }
+
+      scheduleNextFrame();
+    }
+
+    function handlePoseResult(result, nowMs) {
+      const w = elCanvas.width;
+      const h = elCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const hasPose = result && result.landmarks && result.landmarks.length > 0;
+      const leg = hasPose ? selectLegLandmarks(result.landmarks[0]) : { valid: false, minVisibility: 0 };
+
+      if (!leg.valid) {
+        handleTrackingLost();
+        drawOverlay(null, w, h, false);
+        return;
+      }
+
+      // Valid landmarks detected
+      setBadge(elDetectionStatus, "Detecting", "ok");
+      elActiveSide.textContent = `${leg.side} Leg`;
+      const visPct = Math.round(leg.minVisibility * 100);
+      elTrackingQuality.textContent = `Good (${visPct}%)`;
+      elTrackingQuality.style.color = leg.minVisibility >= 0.65 ? "var(--success)" : "var(--warning)";
+
+      // Convert normalized coordinates to pixel space
+      const raw = {
+        heelX: leg.heel.x * w,
+        heelY: leg.heel.y * h,
+        forefootX: leg.forefoot.x * w,
+        forefootY: leg.forefoot.y * h,
+        ankleX: leg.ankle.x * w,
+        ankleY: leg.ankle.y * h,
+        kneeX: leg.knee ? leg.knee.x * w : leg.ankle.x * w,
+        kneeY: leg.knee ? leg.knee.y * h : Math.max(0, leg.ankle.y * h - 100)
+      };
+
+      // Exponential smoothing: S_t = alpha * S_{t-1} + (1 - alpha) * X_t
+      const alpha = Math.min(0.95, Math.max(0, params.smoothing));
+      if (!smoothed) {
+        smoothed = { ...raw };
+      } else {
+        for (const k of Object.keys(raw)) {
+          smoothed[k] = alpha * smoothed[k] + (1 - alpha) * raw[k];
+        }
+      }
+
+      // If recovering from Tracking Lost
+      if (currentPhase === "Tracking Lost") {
+        showWarning("");
+        setMovementPhase(isCalibrated ? "Ready" : "Waiting for Calibration");
+      }
+
+      // Handle active calibration sampling
+      if (isCalibrating) {
+        collectCalibrationSample(leg.side, smoothed, w, h);
+        drawOverlay(smoothed, w, h, true);
+        return;
+      }
+
+      // Evaluate SPU movement if calibrated
+      let estHeelLiftPx = 0;
+      let forefootDriftPx = 0;
+
+      if (isCalibrated && baselineData) {
+        // Check resolution consistency
+        if (baselineData.videoWidth !== w || baselineData.videoHeight !== h) {
+          isCalibrated = false;
+          setBadge(elCalibrationBadge, "Recalibrate", "warn");
+          setMovementPhase("Waiting for Calibration");
+          showWarning("Camera resolution changed. Please press Calibrate again.");
+          return;
+        }
+
+        // Forefoot drift from resting baseline (positive = moved up or down)
+        forefootDriftPx = Math.hypot(
+          smoothed.forefootX - baselineData.forefootX,
+          smoothed.forefootY - baselineData.forefootY
+        );
+
+        // Estimate heel elevation relative to stationary forefoot floor reference and baseline heel position:
+        // In screen coordinates, Y decreases upward.
+        // Absolute upward heel shift: (baselineData.heelY - smoothed.heelY)
+        // Relative heel lift vs forefoot vertical position:
+        //   At baseline: dy0 = baselineData.forefootY - baselineData.heelY
+        //   Current:     dy1 = smoothed.forefootY - smoothed.heelY
+        //   Relative lift = dy1 - dy0 = (baselineData.heelY - smoothed.heelY) - (baselineData.forefootY - smoothed.forefootY)
+        const absHeelLift = baselineData.heelY - smoothed.heelY;
+        const relHeelLift = (smoothed.forefootY - smoothed.heelY) - baselineData.heelToForefootDY;
+
+        // Combine relative-to-forefoot and baseline heel elevation (weighted toward forefoot-referenced displacement)
+        estHeelLiftPx = 0.7 * relHeelLift + 0.3 * absHeelLift;
+
+        elLiveHeelLift.textContent = `${estHeelLiftPx.toFixed(1)} px`;
+        elLiveForefootDrift.textContent = `${forefootDriftPx.toFixed(1)} px`;
+
+        if (forefootDriftPx > 28) {
+          showWarning(
+            "Forefoot moved noticeably from its calibrated floor position. Keep your forefoot planted on the floor or press Calibrate to reset baseline."
+          );
+        } else {
+          showWarning("");
+        }
+
+        updateMovementStateMachine(estHeelLiftPx, nowMs);
+      }
+
+      drawOverlay(smoothed, w, h, true, estHeelLiftPx);
+    }
+
+    function handleTrackingLost() {
+      smoothed = null;
+      setBadge(elDetectionStatus, "Tracking Lost", "err");
+      elTrackingQuality.textContent = "Tracking Lost";
+      elTrackingQuality.style.color = "var(--danger)";
+
+      if (isCalibrating) {
+        isCalibrating = false;
+        calibrationSamples = [];
+        setBadge(elCalibrationBadge, "Calibration Failed", "err");
+        showWarning(
+          "Calibration aborted: Foot and lower-leg landmarks were lost. Keep knee, ankle, heel, and forefoot clearly visible in side view and try again."
+        );
+        updateControlStates();
+      } else {
+        showWarning(
+          "Foot landmarks not sufficiently visible. Keep your lower leg, ankle, heel, and forefoot inside the camera frame with adequate lighting."
+        );
+      }
+
+      // Suspend incomplete cycle and mark phase as Tracking Lost
+      if (currentPhase !== "Tracking Lost") {
+        phaseBeforeTrackingLost = currentPhase;
+        setMovementPhase("Tracking Lost");
+      }
+      cycleStartTime = 0;
+      liftReachedTime = 0;
+      peakHeelLiftPx = 0;
+    }
+
+    // --- Calibration Routine ---
+    btnCalibrate.addEventListener("click", () => {
+      if (!cameraActive || !detectionActive || !modelReady) {
+        showWarning("Start Camera and Start Detection before calibrating.");
+        return;
+      }
+      isCalibrating = true;
+      calibrationSamples = [];
+      elRecalNotice.classList.remove("visible");
+      setBadge(elCalibrationBadge, "Calibrating (0%)", "warn");
+      showWarning("Hold still: Keep your forefoot flat on the floor and heel resting on the ground...");
+      updateControlStates();
+    });
+
+    function collectCalibrationSample(side, pt, w, h) {
+      calibrationSamples.push({
+        side,
+        heelX: pt.heelX,
+        heelY: pt.heelY,
+        forefootX: pt.forefootX,
+        forefootY: pt.forefootY,
+        ankleX: pt.ankleX,
+        ankleY: pt.ankleY
+      });
+
+      const pct = Math.min(100, Math.round((calibrationSamples.length / CALIBRATION_REQUIRED_FRAMES) * 100));
+      setBadge(elCalibrationBadge, `Calibrating (${pct}%)`, "warn");
+
+      if (calibrationSamples.length >= CALIBRATION_REQUIRED_FRAMES) {
+        isCalibrating = false;
+
+        // Check stability across captured frames (reject if heel moved excessively during calibration)
+        const heelYs = calibrationSamples.map((s) => s.heelY);
+        const minY = Math.min(...heelYs);
+        const maxY = Math.max(...heelYs);
+        if (maxY - minY > 12) {
+          calibrationSamples = [];
+          isCalibrated = false;
+          setBadge(elCalibrationBadge, "Unstable — Retry", "err");
+          showWarning(
+            "Calibration failed: Too much movement detected while capturing baseline. Sit still with heel and forefoot grounded and press Calibrate again."
+          );
+          updateControlStates();
+          return;
+        }
+
+        const avg = (arr, key) => arr.reduce((acc, item) => acc + item[key], 0) / arr.length;
+        const heelX = avg(calibrationSamples, "heelX");
+        const heelY = avg(calibrationSamples, "heelY");
+        const forefootX = avg(calibrationSamples, "forefootX");
+        const forefootY = avg(calibrationSamples, "forefootY");
+        const ankleX = avg(calibrationSamples, "ankleX");
+        const ankleY = avg(calibrationSamples, "ankleY");
+
+        baselineData = {
+          side,
+          heelX,
+          heelY,
+          forefootX,
+          forefootY,
+          ankleX,
+          ankleY,
+          heelToForefootDY: forefootY - heelY,
+          videoWidth: w,
+          videoHeight: h
+        };
+
+        isCalibrated = true;
+        setBadge(elCalibrationBadge, `Calibrated (${side})`, "ok");
+        setMovementPhase("Ready");
+        showWarning("");
+        elLastCycleInfo.textContent = "Baseline calibrated. Ready for Soleus Push-Up.";
+        updateControlStates();
+      }
+    }
+
+    // --- SPU Cycle State Machine ---
+    // Phases:
+    // 1. Ready (heel at resting baseline)
+    // 2. Heel Rising (heel rises above liftThreshold)
+    // 3. Heel Raised (heel remains elevated >= minLiftDur)
+    // 4. Heel Lowering (heel begins descending from peak toward baseline)
+    // 5. Repetition Completed (heel returns <= returnThreshold within [minRepDur, maxRepDur] and after cooldown)
+    function updateMovementStateMachine(heelLiftPx, nowMs) {
+      const liftThresh = params.liftThreshold;
+      const returnThresh = params.returnThreshold;
+      const minLiftDur = params.minLiftDur;
+      const minRepDur = params.minRepDur;
+      const maxRepDur = params.maxRepDur;
+      const cooldown = params.cooldown;
+
+      // Return from "Repetition Completed" display hold back to "Ready"
+      if (currentPhase === "Repetition Completed") {
+        if (heelLiftPx > liftThresh && (nowMs - lastRepCompletedTime) >= cooldown) {
+          cycleStartTime = nowMs;
+          liftReachedTime = nowMs;
+          peakHeelLiftPx = heelLiftPx;
+          setMovementPhase("Heel Rising");
+          return;
+        }
+        if (nowMs >= repCompletedHoldUntil && heelLiftPx <= returnThresh) {
+          setMovementPhase("Ready");
+        }
+        return;
+      }
+
+      // Check maximum cycle duration timeout for active phases
+      if (
+        (currentPhase === "Heel Rising" || currentPhase === "Heel Raised" || currentPhase === "Heel Lowering") &&
+        cycleStartTime > 0 &&
+        (nowMs - cycleStartTime) > maxRepDur
+      ) {
+        elLastCycleInfo.textContent = `Rejected: Cycle exceeded max duration (${Math.round(nowMs - cycleStartTime)} ms > ${maxRepDur} ms)`;
+        cycleStartTime = 0;
+        liftReachedTime = 0;
+        peakHeelLiftPx = 0;
+        setMovementPhase("Ready");
+        return;
+      }
+
+      switch (currentPhase) {
+        case "Waiting for Calibration":
+        case "Ready": {
+          if (heelLiftPx >= liftThresh) {
+            if ((nowMs - lastRepCompletedTime) < cooldown) {
+              // Still in cooldown refractory window
+              return;
+            }
+            cycleStartTime = nowMs;
+            liftReachedTime = nowMs;
+            peakHeelLiftPx = heelLiftPx;
+            setMovementPhase("Heel Rising");
+          }
+          break;
+        }
+
+        case "Heel Rising": {
+          if (heelLiftPx > peakHeelLiftPx) {
+            peakHeelLiftPx = heelLiftPx;
+          }
+
+          // If heel drops back below liftThreshold before satisfying minLiftDur, reject as brief noise
+          if (heelLiftPx < liftThresh) {
+            const briefMs = Math.round(nowMs - liftReachedTime);
+            elLastCycleInfo.textContent = `Rejected brief lift (${briefMs} ms < ${minLiftDur} ms min lift)`;
+            cycleStartTime = 0;
+            liftReachedTime = 0;
+            peakHeelLiftPx = 0;
+            setMovementPhase("Ready");
+            return;
+          }
+
+          // Maintained elevation above threshold for Minimum Lift Duration
+          if ((nowMs - liftReachedTime) >= minLiftDur) {
+            setMovementPhase("Heel Raised");
+          }
+          break;
+        }
+
+        case "Heel Raised": {
+          if (heelLiftPx > peakHeelLiftPx) {
+            peakHeelLiftPx = heelLiftPx;
+          }
+
+          // Transition to Heel Lowering when heel descends noticeably from peak or drops below lift threshold
+          const dropFromPeak = peakHeelLiftPx - heelLiftPx;
+          if (heelLiftPx < liftThresh || dropFromPeak >= Math.max(2, (liftThresh - returnThresh) * 0.4)) {
+            setMovementPhase("Heel Lowering");
+          }
+          break;
+        }
+
+        case "Heel Lowering": {
+          // If heel returns near baseline (<= returnThreshold)
+          if (heelLiftPx <= returnThresh) {
+            const totalCycleMs = nowMs - cycleStartTime;
+            if (totalCycleMs < minRepDur) {
+              elLastCycleInfo.textContent = `Rejected fast cycle (${Math.round(totalCycleMs)} ms < ${minRepDur} ms min rep)`;
+              cycleStartTime = 0;
+              liftReachedTime = 0;
+              peakHeelLiftPx = 0;
+              setMovementPhase("Ready");
+            } else if (totalCycleMs > maxRepDur) {
+              elLastCycleInfo.textContent = `Rejected long cycle (${Math.round(totalCycleMs)} ms > ${maxRepDur} ms max rep)`;
+              cycleStartTime = 0;
+              liftReachedTime = 0;
+              peakHeelLiftPx = 0;
+              setMovementPhase("Ready");
+            } else if ((nowMs - lastRepCompletedTime) < cooldown) {
+              elLastCycleInfo.textContent = `Rejected duplicate within cooldown (${cooldown} ms)`;
+              cycleStartTime = 0;
+              liftReachedTime = 0;
+              peakHeelLiftPx = 0;
+              setMovementPhase("Ready");
+            } else {
+              // Valid repetition completed!
+              repCount += 1;
+              lastRepCompletedTime = nowMs;
+              repCompletedHoldUntil = nowMs + 450;
+              elLastCycleInfo.textContent = `Rep #${repCount} valid • Peak: ${peakHeelLiftPx.toFixed(1)} px • Duration: ${Math.round(totalCycleMs)} ms`;
+              cycleStartTime = 0;
+              liftReachedTime = 0;
+              peakHeelLiftPx = 0;
+              updateRepUI();
+              setMovementPhase("Repetition Completed");
+            }
+          } else if (heelLiftPx > peakHeelLiftPx) {
+            // User raised heel higher again before returning to baseline
+            peakHeelLiftPx = heelLiftPx;
+            setMovementPhase("Heel Raised");
+          }
+          break;
+        }
+      }
+    }
+
+    // --- Canvas Overlay Drawing ---
+    function drawOverlay(pt, w, h, isValid, estHeelLiftPx = 0) {
+      // Draw baseline reference lines if calibrated
+      if (isCalibrated && baselineData) {
+        const baseHeelY = baselineData.heelY;
+        const liftLineY = baseHeelY - params.liftThreshold;
+        const returnLineY = baseHeelY - params.returnThreshold;
+
+        // Baseline floor reference
+        ctx.save();
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.75)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, baseHeelY);
+        ctx.lineTo(w, baseHeelY);
+        ctx.stroke();
+
+        // Lift Threshold Line
+        ctx.strokeStyle = "rgba(34, 197, 94, 0.85)";
+        ctx.beginPath();
+        ctx.moveTo(0, liftLineY);
+        ctx.lineTo(w, liftLineY);
+        ctx.stroke();
+
+        // Return Threshold Line
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.65)";
+        ctx.beginPath();
+        ctx.moveTo(0, returnLineY);
+        ctx.lineTo(w, returnLineY);
+        ctx.stroke();
+        ctx.restore();
+
+        // Labels on right edge
+        ctx.save();
+        ctx.font = "11px sans-serif";
+        ctx.fillStyle = "#4ade80";
+        ctx.fillText(`Lift Thresh (-${params.liftThreshold}px)`, 10, Math.max(14, liftLineY - 4));
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillText("Resting Baseline", 10, Math.min(h - 6, baseHeelY + 13));
+        ctx.restore();
+      }
+
+      if (!isValid || !pt) return;
+
+      // Draw skeletal segments: Knee -> Ankle -> Heel -> Forefoot -> Ankle
+      ctx.save();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(pt.kneeX, pt.kneeY);
+      ctx.lineTo(pt.ankleX, pt.ankleY);
+      ctx.lineTo(pt.heelX, pt.heelY);
+      ctx.lineTo(pt.forefootX, pt.forefootY);
+      ctx.lineTo(pt.ankleX, pt.ankleY);
+      ctx.stroke();
+
+      // Draw key joint points
+      const joints = [
+        { x: pt.kneeX, y: pt.kneeY, label: "Knee", color: "#94a3b8", r: 5 },
+        { x: pt.ankleX, y: pt.ankleY, label: "Ankle", color: "#38bdf8", r: 6 },
+        { x: pt.forefootX, y: pt.forefootY, label: "Forefoot", color: "#f59e0b", r: 7 },
+        {
+          x: pt.heelX,
+          y: pt.heelY,
+          label: isCalibrated ? `Heel (${estHeelLiftPx >= 0 ? "+" : ""}${estHeelLiftPx.toFixed(1)}px)` : "Heel",
+          color: estHeelLiftPx >= params.liftThreshold ? "#22c55e" : "#f43f5e",
+          r: 8
+        }
+      ];
+
+      for (const j of joints) {
+        ctx.beginPath();
+        ctx.arc(j.x, j.y, j.r, 0, Math.PI * 2);
+        ctx.fillStyle = j.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#0f172a";
+        ctx.stroke();
+
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillStyle = "#f8fafc";
+        ctx.strokeStyle = "#0f172a";
+        ctx.lineWidth = 3;
+        ctx.strokeText(j.label, j.x + 10, j.y + 4);
+        ctx.fillText(j.label, j.x + 10, j.y + 4);
+      }
+      ctx.restore();
+    }
+
+    // --- Monotonic Timer Logic ---
+    function getElapsedMs() {
+      if (!timerRunning) return timerAccumulatedMs;
+      if (timerPaused) return timerAccumulatedMs;
+      return timerAccumulatedMs + (performance.now() - timerStartMono);
+    }
+
+    function formatMMSS(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function renderTimer() {
+      elTimerDisplay.textContent = formatMMSS(getElapsedMs());
+    }
+
+    function updateTimerButtons() {
+      btnStartTimer.disabled = timerRunning;
+      btnPauseTimer.disabled = !timerRunning || timerPaused;
+      btnResumeTimer.disabled = !timerRunning || !timerPaused;
+    }
+
+    btnStartTimer.addEventListener("click", () => {
+      if (timerRunning) return;
+      timerRunning = true;
+      timerPaused = false;
+      timerAccumulatedMs = 0;
+      timerStartMono = performance.now();
+      elTimerStateSub.textContent = "Running";
+      if (timerIntervalId !== null) clearInterval(timerIntervalId);
+      timerIntervalId = setInterval(renderTimer, 100);
+      renderTimer();
+      updateTimerButtons();
+    });
+
+    btnPauseTimer.addEventListener("click", () => {
+      if (!timerRunning || timerPaused) return;
+      timerAccumulatedMs += performance.now() - timerStartMono;
+      timerPaused = true;
+      elTimerStateSub.textContent = "Paused";
+      renderTimer();
+      updateTimerButtons();
+    });
+
+    btnResumeTimer.addEventListener("click", () => {
+      if (!timerRunning || !timerPaused) return;
+      timerStartMono = performance.now();
+      timerPaused = false;
+      elTimerStateSub.textContent = "Running";
+      renderTimer();
+      updateTimerButtons();
+    });
+
+    btnResetSession.addEventListener("click", () => {
+      if (repCount > 0 || getElapsedMs() > 0) {
+        const confirmed = window.confirm("Reset elapsed timer and repetition counter to zero?");
+        if (!confirmed) return;
+      }
+      if (timerIntervalId !== null) {
+        clearInterval(timerIntervalId);
+        timerIntervalId = null;
+      }
+      timerRunning = false;
+      timerPaused = false;
+      timerAccumulatedMs = 0;
+      timerStartMono = 0;
+      elTimerDisplay.textContent = "00:00";
+      elTimerStateSub.textContent = "Stopped";
+
+      repCount = 0;
+      cycleStartTime = 0;
+      liftReachedTime = 0;
+      peakHeelLiftPx = 0;
+      lastRepCompletedTime = -Infinity;
+      updateRepUI();
+      setMovementPhase(isCalibrated ? "Ready" : "Waiting for Calibration");
+      elLastCycleInfo.textContent = "Timer and repetition counter reset.";
+      updateTimerButtons();
+    });
+
+    // --- Wire Camera & Detection Buttons ---
+    btnStartCamera.addEventListener("click", startCamera);
+    btnStopCamera.addEventListener("click", stopCamera);
+    btnStartDetection.addEventListener("click", startDetection);
+    btnStopDetection.addEventListener("click", stopDetection);
+
+    // Initialize UI & Load Model on Startup
+    syncParamUI();
+    updateTimerButtons();
+    updateControlStates();
+    initPoseModel();
+  </script>
+</body>
+</html>
